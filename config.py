@@ -10,8 +10,7 @@ load_dotenv()
 # ------------------------------------------------------------------
 # BORSA / VERI AYARLARI
 # ------------------------------------------------------------------
-BINANCE_BASE_URL = "https://api.binance.com"
-DEFAULT_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
+BINANCE_BASE_URL = "https://data-api.binance.vision"DEFAULT_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
 AVAILABLE_INTERVALS = ["1m", "5m", "15m", "1h", "4h", "1d"]
 DEFAULT_INTERVAL = "15m"
 KLINE_LIMIT = 250  # SMA200 icin yeterli veri noktasi
