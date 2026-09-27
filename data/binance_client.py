@@ -5,6 +5,8 @@ Yalnizca herkese acik piyasa verisi (market data) uc noktalarini kullanir;
 API anahtari veya hesap erisimi GEREKTIRMEZ. Bu modulde emir verme/alma,
 cuzdan erisimi gibi hicbir islev YOKTUR - sadece okuma amaclidir.
 """
+import json
+
 import pandas as pd
 import requests
 
@@ -66,3 +68,48 @@ def fetch_ticker_24hr(symbol: str) -> dict:
     if not isinstance(data, dict):
         raise BinanceAPIError(f"{symbol} icin 24 saatlik veri beklenmeyen formatta dondu.")
     return data
+
+
+def fetch_all_tickers_24hr() -> list:
+    """TUM paritelerin 24 saatlik istatistiklerini TEK istekte ceker
+    (sembol parametresi verilmezse Binance tum semboller icin veri doner).
+    Hacim Tarayicisi (scanner) icin kullanilir."""
+    data = _get("/api/v3/ticker/24hr", {})
+    if not isinstance(data, list):
+        raise BinanceAPIError("Toplu 24 saatlik veri beklenmeyen formatta dondu.")
+    return data
+
+
+def fetch_exchange_info() -> dict:
+    """Borsada islem goren tum paritelerin listesini ve durumunu dondurur.
+    Hangi paritelerin taranabilir oldugunu belirlemek icin kullanilir."""
+    data = _get("/api/v3/exchangeInfo", {})
+    if not isinstance(data, dict):
+        raise BinanceAPIError("exchangeInfo beklenmeyen formatta dondu.")
+    return data
+
+
+def fetch_rolling_tickers(symbols: list, window_size: str) -> list:
+    """Birden fazla sembol icin SECILEN zaman penceresine (ornegin '5m',
+    '15m', '1h') gore fiyat degisim istatistiklerini toplu olarak ceker.
+
+    Binance tek istekte cok fazla sembolu kabul etmeyebildigi icin liste
+    kucuk gruplara (batch) bolunerek birden fazla istek yapilir ve
+    sonuclar birlestirilir."""
+    if not symbols:
+        return []
+
+    results = []
+    batch_size = 100
+    for i in range(0, len(symbols), batch_size):
+        batch = symbols[i:i + batch_size]
+        params = {
+            "symbols": json.dumps(batch, separators=(",", ":")),
+            "windowSize": window_size,
+        }
+        data = _get("/api/v3/ticker", params)
+        if isinstance(data, list):
+            results.extend(data)
+        elif isinstance(data, dict):
+            results.append(data)
+    return results

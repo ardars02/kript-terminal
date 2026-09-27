@@ -8,10 +8,16 @@ README.md dosyasini ve asagida gosterilen uyari metnini okuyun.
 """
 from datetime import datetime
 
+import pandas as pd
 import streamlit as st
 
 import config
-from data.binance_client import fetch_klines, fetch_ticker_24hr, BinanceAPIError
+from data.binance_client import (
+    fetch_klines,
+    fetch_ticker_24hr,
+    fetch_exchange_info,
+    BinanceAPIError,
+)
 from analysis.indicators import add_all_indicators
 from analysis.sentiment import fetch_news_headlines, compute_news_sentiment
 from analysis.decision_engine import (
@@ -19,6 +25,7 @@ from analysis.decision_engine import (
     compute_composite_score,
     classify_score,
 )
+from analysis.scanner import build_momentum_table
 from utils.risk import compute_position_size, classify_volatility
 from ui.styles import get_custom_css
 from ui.charts import build_price_chart
@@ -51,6 +58,16 @@ def cached_ticker(symbol: str):
 @st.cache_data(ttl=300, show_spinner=False)
 def cached_news():
     return fetch_news_headlines(config.NEWS_FEEDS, config.NEWS_MAX_ITEMS_PER_FEED)
+
+
+@st.cache_data(ttl=config.MOMENTUM_EXCHANGE_INFO_TTL_SECONDS, show_spinner=False)
+def cached_exchange_info():
+    return fetch_exchange_info()
+
+
+@st.cache_data(ttl=config.MOMENTUM_CACHE_TTL_SECONDS, show_spinner=False)
+def cached_momentum_table(window_size: str, top_n: int, direction: str):
+    return build_momentum_table(cached_exchange_info(), window_size, top_n, direction)
 
 
 # ============================================================
@@ -107,103 +124,165 @@ st.title("📊 Kripto Karar Destek ve Olasılık Terminali")
 st.markdown(f"<div class='disclaimer-box'>⚠️ {config.DISCLAIMER_TEXT}</div>", unsafe_allow_html=True)
 st.caption(f"Son güncelleme: {datetime.now().strftime('%H:%M:%S')}")
 
-# ============================================================
-# İZLEME LİSTESİ
-# ============================================================
-st.subheader("👁️ İzleme Listesi")
-watch_cols = st.columns(len(config.DEFAULT_SYMBOLS))
-for i, sym in enumerate(config.DEFAULT_SYMBOLS):
-    with watch_cols[i]:
-        try:
-            t = cached_ticker(sym)
-            chg = float(t["priceChangePercent"])
-            st.metric(sym.replace("USDT", ""), f"${float(t['lastPrice']):,.2f}", f"{chg:+.2f}%")
-        except BinanceAPIError:
-            st.warning(f"{sym}: alınamadı")
-
-st.markdown("---")
+tab1, tab2 = st.tabs(["📊 Teknik Analiz", "🔥 Hareketlilik Tarayıcısı"])
 
 # ============================================================
-# ANA SEMBOL: VERİ ÇEKME
+# TAB 1: MEVCUT TEKNİK ANALİZ PANOSU
 # ============================================================
-try:
-    df = cached_klines(selected_symbol, interval, config.KLINE_LIMIT)
-    df = add_all_indicators(df)
-    ticker_data = cached_ticker(selected_symbol)
-except BinanceAPIError as e:
-    st.error(f"Binance API hatası: {e}")
-    st.info("Parite adının doğru olduğundan (ör. BTCUSDT) ve internet bağlantınızın aktif olduğundan emin olun.")
-    st.stop()
-
-news_items = cached_news()
-sentiment_score, annotated_news = compute_news_sentiment(news_items[: config.NEWS_LOOKBACK_ITEMS])
-tech_score, tech_breakdown = compute_technical_score(df)
-composite = compute_composite_score(tech_score, sentiment_score)
-label, color = classify_score(composite)
-
-col1, col2 = st.columns([2, 1])
-
-with col1:
-    st.subheader(f"{selected_symbol} — Teknik Analiz ({interval})")
-    st.plotly_chart(build_price_chart(df, selected_symbol), use_container_width=True)
-
-with col2:
-    st.subheader("🧮 Piyasa Eğilim Skoru")
-    st.markdown(
-        f"<div class='score-box score-{color}'><h1>{composite:.0f}/100</h1><p>{label}</p></div>",
-        unsafe_allow_html=True,
-    )
-    st.caption(
-        "Bu skor istatistiksel olarak doğrulanmış bir olasılık tahmini "
-        "DEĞİLDİR; teknik göstergeler ile haber duyarlılığının ağırlıklı "
-        "bir sezgisel (heuristic) bileşimidir. Bkz. README.md."
-    )
-
-    st.markdown("**Alt Skorlar**")
-    st.write(f"Teknik Skor: {tech_score:.0f}/100")
-    for k, v in tech_breakdown.items():
-        st.progress(min(max(v / 100, 0.0), 1.0), text=f"{k}: {v:.0f}/100")
-    st.write(f"Haber Duyarlılık Skoru: {sentiment_score:.0f}/100")
+with tab1:
+    st.subheader("👁️ İzleme Listesi")
+    watch_cols = st.columns(len(config.DEFAULT_SYMBOLS))
+    for i, sym in enumerate(config.DEFAULT_SYMBOLS):
+        with watch_cols[i]:
+            try:
+                t = cached_ticker(sym)
+                chg = float(t["priceChangePercent"])
+                st.metric(sym.replace("USDT", ""), f"${float(t['lastPrice']):,.2f}", f"{chg:+.2f}%")
+            except BinanceAPIError:
+                st.warning(f"{sym}: alınamadı")
 
     st.markdown("---")
-    atr_pct = df["ATR_Pct"].iloc[-1]
-    vol_label = classify_volatility(atr_pct)
-    st.subheader("📉 Oynaklık (ATR)")
-    st.write(f"ATR: %{atr_pct:.2f} — **{vol_label} Oynaklık**")
 
-    st.markdown("---")
-    st.subheader("💰 Pozisyon Büyüklüğü Hesabı")
-    pos = compute_position_size(
-        account_balance, risk_percent, stop_loss_percent,
-        current_price=float(ticker_data["lastPrice"]),
-    )
-    st.write(f"Önerilen Maks. Pozisyon: **${pos['position_size_usd']:,.2f}**")
-    st.write(f"Riske Atılan Tutar: ${pos['max_loss_usd']:,.2f}")
-    if "position_size_units" in pos:
-        st.write(f"Yaklaşık Miktar: {pos['position_size_units']:.6f} {selected_symbol.replace('USDT', '')}")
-    st.caption(
-        "Bu, standart sermaye risk yönetimi matematiğidir; bir kaldıraç "
-        "veya alım/satım tavsiyesi değildir."
-    )
+    try:
+        df = cached_klines(selected_symbol, interval, config.KLINE_LIMIT)
+        df = add_all_indicators(df)
+        ticker_data = cached_ticker(selected_symbol)
+    except BinanceAPIError as e:
+        st.error(f"Binance API hatası: {e}")
+        st.info("Parite adının doğru olduğundan (ör. BTCUSDT) ve internet bağlantınızın aktif olduğundan emin olun.")
+        st.stop()
 
-st.markdown("---")
+    news_items = cached_news()
+    sentiment_score, annotated_news = compute_news_sentiment(news_items[: config.NEWS_LOOKBACK_ITEMS])
+    tech_score, tech_breakdown = compute_technical_score(df)
+    composite = compute_composite_score(tech_score, sentiment_score)
+    label, color = classify_score(composite)
 
-# ============================================================
-# HABER AKIŞI
-# ============================================================
-st.subheader("📰 Piyasa Haberleri ve Duyarlılık Analizi")
-if annotated_news:
-    tag_map = {"Pozitif": "green", "Negatif": "red", "Nötr": "gray"}
-    for item in annotated_news[:15]:
-        tag_color = tag_map.get(item["sentiment_label"], "gray")
+    col1, col2 = st.columns([2, 1])
+
+    with col1:
+        st.subheader(f"{selected_symbol} — Teknik Analiz ({interval})")
+        st.plotly_chart(build_price_chart(df, selected_symbol), use_container_width=True)
+
+    with col2:
+        st.subheader("🧮 Piyasa Eğilim Skoru")
         st.markdown(
-            f"<div class='news-item'><span class='tag-{tag_color}'>{item['sentiment_label']}</span> "
-            f"<a href='{item['link']}' target='_blank'>{item['title']}</a> "
-            f"<span class='news-source'>— {item['source']}</span></div>",
+            f"<div class='score-box score-{color}'><h1>{composite:.0f}/100</h1><p>{label}</p></div>",
             unsafe_allow_html=True,
         )
-else:
-    st.info("Şu anda haber kaynaklarından veri alınamadı.")
+        st.caption(
+            "Bu skor istatistiksel olarak doğrulanmış bir olasılık tahmini "
+            "DEĞİLDİR; teknik göstergeler ile haber duyarlılığının ağırlıklı "
+            "bir sezgisel (heuristic) bileşimidir. Bkz. README.md."
+        )
+
+        st.markdown("**Alt Skorlar**")
+        st.write(f"Teknik Skor: {tech_score:.0f}/100")
+        for k, v in tech_breakdown.items():
+            st.progress(min(max(v / 100, 0.0), 1.0), text=f"{k}: {v:.0f}/100")
+        st.write(f"Haber Duyarlılık Skoru: {sentiment_score:.0f}/100")
+
+        st.markdown("---")
+        atr_pct = df["ATR_Pct"].iloc[-1]
+        vol_label = classify_volatility(atr_pct)
+        st.subheader("📉 Oynaklık (ATR)")
+        st.write(f"ATR: %{atr_pct:.2f} — **{vol_label} Oynaklık**")
+
+        st.markdown("---")
+        st.subheader("💰 Pozisyon Büyüklüğü Hesabı")
+        pos = compute_position_size(
+            account_balance, risk_percent, stop_loss_percent,
+            current_price=float(ticker_data["lastPrice"]),
+        )
+        st.write(f"Önerilen Maks. Pozisyon: **${pos['position_size_usd']:,.2f}**")
+        st.write(f"Riske Atılan Tutar: ${pos['max_loss_usd']:,.2f}")
+        if "position_size_units" in pos:
+            st.write(f"Yaklaşık Miktar: {pos['position_size_units']:.6f} {selected_symbol.replace('USDT', '')}")
+        st.caption(
+            "Bu, standart sermaye risk yönetimi matematiğidir; bir kaldıraç "
+            "veya alım/satım tavsiyesi değildir."
+        )
+
+    st.markdown("---")
+
+    st.subheader("📰 Piyasa Haberleri ve Duyarlılık Analizi")
+    if annotated_news:
+        tag_map = {"Pozitif": "green", "Negatif": "red", "Nötr": "gray"}
+        for item in annotated_news[:15]:
+            tag_color = tag_map.get(item["sentiment_label"], "gray")
+            st.markdown(
+                f"<div class='news-item'><span class='tag-{tag_color}'>{item['sentiment_label']}</span> "
+                f"<a href='{item['link']}' target='_blank'>{item['title']}</a> "
+                f"<span class='news-source'>— {item['source']}</span></div>",
+                unsafe_allow_html=True,
+            )
+    else:
+        st.info("Şu anda haber kaynaklarından veri alınamadı.")
+
+# ============================================================
+# TAB 2: PİYASA GENELİNDE HAREKETLİLİK TARAYICISI
+# ============================================================
+with tab2:
+    st.subheader("🔥 Piyasa Genelinde Hareketlilik Tarayıcısı")
+    st.markdown(
+        "<div class='disclaimer-box'>⚠️ Bu liste, seçtiğiniz zaman penceresinde "
+        "<b>şimdiye kadar gerçekleşmiş</b> fiyat değişimine göre sıralanır — "
+        "geçmişe dönük bir ölçümdür. Bir coinin bundan sonra da aynı yönde "
+        "hareket edeceğinin tahmini veya garantisi DEĞİLDİR; güçlü bir kısa "
+        "vadeli hareket aynı şekilde devam edebileceği gibi aniden tersine de "
+        "dönebilir. Sadece popüler birkaç coinle sınırlı değildir — "
+        "Binance'teki tüm USDT paritelerini tarar.</div>",
+        unsafe_allow_html=True,
+    )
+
+    window_display = {
+        "5m": "Son 5 dakika", "15m": "Son 15 dakika",
+        "30m": "Son 30 dakika", "1h": "Son 1 saat",
+    }
+    scan_col1, scan_col2, scan_col3 = st.columns([1, 1, 1])
+    with scan_col1:
+        window_size = st.selectbox(
+            "Zaman Penceresi", config.MOMENTUM_WINDOW_OPTIONS,
+            index=config.MOMENTUM_WINDOW_OPTIONS.index(config.MOMENTUM_DEFAULT_WINDOW),
+            format_func=lambda w: window_display.get(w, w),
+        )
+    with scan_col2:
+        direction_choice = st.radio("Yön", ["Yükselenler", "Düşenler"], horizontal=True)
+        direction = "gainers" if direction_choice == "Yükselenler" else "losers"
+    with scan_col3:
+        top_n = st.slider("Kaç Coin Gösterilsin", 5, 50, config.MOMENTUM_DEFAULT_TOP_N)
+
+    if st.button("🔍 Şimdi Tara", key="scan_now_button"):
+        cached_momentum_table.clear()
+
+    momentum_df = None
+    try:
+        with st.spinner("Piyasa taranıyor (yüzlerce parite kontrol ediliyor)..."):
+            momentum_df = cached_momentum_table(window_size, top_n, direction)
+    except BinanceAPIError as e:
+        st.error(f"Tarama sırasında hata: {e}")
+
+    if momentum_df is None or momentum_df.empty:
+        st.info("Şu anda tarama verisi alınamadı.")
+    else:
+        display_df = momentum_df.copy()
+        display_df["Fiyat"] = display_df["Fiyat"].map(lambda x: f"${x:,.4f}" if x < 1 else f"${x:,.2f}")
+        display_df["Değişim (%)"] = display_df["Değişim (%)"].map(lambda x: f"{x:+.2f}%")
+        display_df["Pencere Hacmi"] = display_df["Pencere Hacmi"].map(lambda x: f"{x:,.0f}")
+        display_df["Hacim Oranı"] = display_df["Hacim Oranı"].map(
+            lambda x: f"{x:.1f}x" if pd.notna(x) else "—"
+        )
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        st.caption(
+            "Hacim Oranı: bu penceredeki hacmin, o coinin normal günlük "
+            "hacminden 'beklenen payına' oranıdır (1.0x = normal, yüksek "
+            "değer = olağandışı yoğun ilgi)."
+        )
+        st.caption(
+            "İncelemek istediğiniz bir coin varsa, kenar çubuğundaki "
+            "'Özel Parite' kutusuna yazıp 📊 Teknik Analiz sekmesinde "
+            "detaylı göstergelerine bakabilirsiniz."
+        )
 
 st.markdown("---")
 st.caption(config.DISCLAIMER_TEXT)

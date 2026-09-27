@@ -48,8 +48,25 @@ matematiğini (pozisyon büyüklüğü) hesaplar.
   birleşimi, 0-100 arası, renk kodlu (yeşil/sarı/kırmızı)
 - **Risk / Pozisyon Hesaplayıcı:** Hesap bakiyesi, risk yüzdesi ve
   stop-loss mesafesine göre standart pozisyon büyüklüğü hesaplaması
+- **🔥 Hareketlilik Tarayıcısı (yeni sekme):** Sadece birkaç popüler
+  coinle sınırlı kalmadan, Binance'teki **tüm USDT paritelerini**
+  tarayıp seçtiğiniz zaman penceresinde (son 5 dk / 15 dk / 30 dk / 1
+  saat) en çok yükselen veya düşen coinleri listeler — bkz. aşağıdaki
+  önemli not
 - **Koyu Tema Arayüz:** Streamlit + özel CSS ile modern görünüm
 - **Otomatik Yenileme:** Ayarlanabilir aralıkla canlı veri güncelleme
+
+## 🔥 Hareketlilik Tarayıcısı hakkında önemli bir not
+
+Bu sekme, seçtiğiniz zaman penceresinde (ör. son 15 dakika) **şimdiye
+kadar gerçekleşmiş** fiyat değişimine göre sıralama yapar — tamamen
+**geçmişe dönük** bir ölçümdür. Bir coinin listede üstte çıkması, bundan
+sonra da aynı yönde hareket edeceğinin tahmini veya garantisi DEĞİLDİR;
+güçlü bir kısa vadeli hareket aynı şekilde devam edebileceği gibi
+aniden tersine de dönebilir. "Hacim Oranı" sütunu, o coinin normal
+günlük hacminden bu pencereye düşen "beklenen paya" kıyasla ne kadar
+hacim gördüğünü gösterir (1.0x = normal, yüksek değer = olağandışı
+yoğun ilgi) — yine bilgi amaçlıdır, bir sinyal garantisi değildir.
 
 ## 📁 Proje Yapısı
 
@@ -64,7 +81,8 @@ kripto-terminal/
 ├── analysis/
 │   ├── indicators.py             # RSI, MACD, SMA, Hacim, ATR hesaplamaları
 │   ├── sentiment.py               # Haber toplama ve duyarlılık skorlama
-│   └── decision_engine.py         # Kompozit "Piyasa Eğilim Skoru" mantığı
+│   ├── decision_engine.py         # Kompozit "Piyasa Eğilim Skoru" mantığı
+│   └── scanner.py                 # Piyasa genelinde hareketlilik tarayıcısı
 ├── utils/
 │   └── risk.py                    # Pozisyon büyüklüğü / risk hesaplayıcı
 └── ui/

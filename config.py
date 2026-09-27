@@ -110,6 +110,27 @@ VOLATILITY_LOW_THRESHOLD = 1.0   # ATR% < bu deger -> Dusuk
 VOLATILITY_HIGH_THRESHOLD = 3.0  # ATR% > bu deger -> Yuksek
 
 # ------------------------------------------------------------------
+# HAREKETLILIK TARAYICISI (MOMENTUM SCANNER)
+# ------------------------------------------------------------------
+# NOT: Bu tarayici, SECILEN zaman penceresinde GERCEKLESMIS OLAN fiyat
+# degisimine gore siralama yapar - GECMISE DONUK bir olcumdur. Bir coinin
+# bundan sonra da ayni yonde hareket edecegine dair bir garanti veya
+# tahmin DEGILDIR.
+MOMENTUM_WINDOW_OPTIONS = ["5m", "15m", "30m", "1h"]
+MOMENTUM_DEFAULT_WINDOW = "15m"
+MOMENTUM_DEFAULT_TOP_N = 20
+MOMENTUM_CACHE_TTL_SECONDS = 60
+MOMENTUM_EXCHANGE_INFO_TTL_SECONDS = 3600
+
+# Taramadan haric tutulacak varlik turleri (heuristic filtreler):
+# - Stabilcoin bazli paritelerde "hareket" cogunlukla anlamsiz gurultudur.
+# - Kaldiracli token'lar (UP/DOWN/BULL/BEAR) normal spot coin degildir.
+MOMENTUM_EXCLUDE_STABLE_BASES = {
+    "USDC", "FDUSD", "TUSD", "BUSD", "DAI", "USDP", "PYUSD", "EURI", "USTC",
+}
+MOMENTUM_EXCLUDE_LEVERAGED_SUFFIXES = ("UP", "DOWN", "BULL", "BEAR")
+
+# ------------------------------------------------------------------
 # YASAL UYARI METNI
 # ------------------------------------------------------------------
 DISCLAIMER_TEXT = (
