@@ -1,0 +1,2 @@
+# kript-terminal
+kripto analiz
