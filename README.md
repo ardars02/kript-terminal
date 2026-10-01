@@ -162,3 +162,8 @@ düzenlemelere uymak sizin sorumluluğunuzdadır.
   içinden güncelleyin.
 - SMA200 gibi uzun periyotlu göstergeler, seçilen mum aralığında yeterli
   geçmiş veri yoksa (ör. yeni listelenen bir coin) daha az anlamlı olur.
+- Hareketlilik Tarayıcısı, Binance'in çoklu-sembol `symbols=[...]`
+  parametresi bazı ortamlarda (`data-api.binance.vision` üzerinden)
+  "Illegal characters" hatası verdiği için, her pariteyi TEKİL istekle
+  (es zamanlı/concurrent olarak) çeker. Bu biraz daha fazla istek
+  anlamına gelir ama çok daha güvenilirdir.

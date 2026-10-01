@@ -16,6 +16,7 @@ from data.binance_client import (
     fetch_klines,
     fetch_ticker_24hr,
     fetch_exchange_info,
+    fetch_all_tickers_24hr,
     BinanceAPIError,
 )
 from analysis.indicators import add_all_indicators
@@ -25,7 +26,7 @@ from analysis.decision_engine import (
     compute_composite_score,
     classify_score,
 )
-from analysis.scanner import build_momentum_table
+from analysis.scanner import fetch_momentum_klines, build_momentum_table
 from utils.risk import compute_position_size, classify_volatility
 from ui.styles import get_custom_css
 from ui.charts import build_price_chart
@@ -66,8 +67,13 @@ def cached_exchange_info():
 
 
 @st.cache_data(ttl=config.MOMENTUM_CACHE_TTL_SECONDS, show_spinner=False)
-def cached_momentum_table(window_size: str, top_n: int, direction: str):
-    return build_momentum_table(cached_exchange_info(), window_size, top_n, direction)
+def cached_momentum_klines():
+    return fetch_momentum_klines(cached_exchange_info())
+
+
+@st.cache_data(ttl=config.MOMENTUM_CACHE_TTL_SECONDS, show_spinner=False)
+def cached_daily_tickers():
+    return fetch_all_tickers_24hr()
 
 
 # ============================================================
@@ -253,12 +259,15 @@ with tab2:
         top_n = st.slider("Kaç Coin Gösterilsin", 5, 50, config.MOMENTUM_DEFAULT_TOP_N)
 
     if st.button("🔍 Şimdi Tara", key="scan_now_button"):
-        cached_momentum_table.clear()
+        cached_momentum_klines.clear()
+        cached_daily_tickers.clear()
 
     momentum_df = None
     try:
         with st.spinner("Piyasa taranıyor (yüzlerce parite kontrol ediliyor)..."):
-            momentum_df = cached_momentum_table(window_size, top_n, direction)
+            klines_map = cached_momentum_klines()
+            daily_tickers = cached_daily_tickers()
+            momentum_df = build_momentum_table(klines_map, daily_tickers, window_size, top_n, direction)
     except BinanceAPIError as e:
         st.error(f"Tarama sırasında hata: {e}")
 

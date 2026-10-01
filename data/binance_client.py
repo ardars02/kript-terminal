@@ -5,7 +5,7 @@ Yalnizca herkese acik piyasa verisi (market data) uc noktalarini kullanir;
 API anahtari veya hesap erisimi GEREKTIRMEZ. Bu modulde emir verme/alma,
 cuzdan erisimi gibi hicbir islev YOKTUR - sadece okuma amaclidir.
 """
-import json
+import concurrent.futures
 
 import pandas as pd
 import requests
@@ -89,27 +89,32 @@ def fetch_exchange_info() -> dict:
     return data
 
 
-def fetch_rolling_tickers(symbols: list, window_size: str) -> list:
-    """Birden fazla sembol icin SECILEN zaman penceresine (ornegin '5m',
-    '15m', '1h') gore fiyat degisim istatistiklerini toplu olarak ceker.
+def fetch_klines_bulk(symbols: list, interval: str, limit: int, max_workers: int = 20) -> dict:
+    """Birden fazla sembol icin mum verisini ES ZAMANLI (concurrent) olarak
+    ceker.
 
-    Binance tek istekte cok fazla sembolu kabul etmeyebildigi icin liste
-    kucuk gruplara (batch) bolunerek birden fazla istek yapilir ve
-    sonuclar birlestirilir."""
+    NOT: Binance'in bazi aynalarinda / bazi agirliklarda (ozellikle
+    data-api.binance.vision uzerinden) coklu-sembol JSON-array parametresi
+    ("symbols=[...]") beklenmedik sekilde reddedilebiliyor ("Illegal
+    characters found in parameter 'symbols'" hatasi). Bu yuzden burada,
+    HER ZAMAN guvenilir calisan TEKIL sembol parametresi (`symbol=`)
+    kullanilir; hiz kaybini onlemek icin cok sayida istek es zamanli
+    calistirilir.
+
+    Bir sembol icin istek basarisiz olursa o sembol sessizce atlanir,
+    digerleri etkilenmez. Donus: {sembol: DataFrame}."""
+    results = {}
     if not symbols:
-        return []
+        return results
 
-    results = []
-    batch_size = 100
-    for i in range(0, len(symbols), batch_size):
-        batch = symbols[i:i + batch_size]
-        params = {
-            "symbols": json.dumps(batch, separators=(",", ":")),
-            "windowSize": window_size,
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_map = {
+            executor.submit(fetch_klines, s, interval, limit): s for s in symbols
         }
-        data = _get("/api/v3/ticker", params)
-        if isinstance(data, list):
-            results.extend(data)
-        elif isinstance(data, dict):
-            results.append(data)
+        for future in concurrent.futures.as_completed(future_map):
+            symbol = future_map[future]
+            try:
+                results[symbol] = future.result()
+            except BinanceAPIError:
+                continue
     return results
