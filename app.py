@@ -40,7 +40,7 @@ except ImportError:
 
 st.set_page_config(
     page_title="Kripto Karar Destek ve Olasilik Terminali",
-    page_icon="📊",
+    page_icon="",
     layout="wide",
 )
 st.markdown(get_custom_css(), unsafe_allow_html=True)
