@@ -40,7 +40,7 @@ except ImportError:
 
 st.set_page_config(
     page_title="Kripto Karar Destek ve Olasilik Terminali",
-    page_icon="",
+    page_icon="📊",
     layout="wide",
 )
 st.markdown(get_custom_css(), unsafe_allow_html=True)
@@ -126,7 +126,7 @@ stop_loss_percent = st.sidebar.slider(
 # ============================================================
 # BAŞLIK VE YASAL UYARI
 # ============================================================
-st.title("📊 Kripto Karar Destek ve Olasılık Terminali")
+st.title(" Kripto Karar Destek ve Olasılık Terminali")
 st.markdown(f"<div class='disclaimer-box'>⚠️ {config.DISCLAIMER_TEXT}</div>", unsafe_allow_html=True)
 st.caption(f"Son güncelleme: {datetime.now().strftime('%H:%M:%S')}")
 
