@@ -1,4 +1,5 @@
-# 📊 Kripto Karar Destek ve Olasılık Terminali
+# Kripto Karar Destek ve Olasılık Terminali
+Arda Arslan
 
 Python ve Streamlit ile geliştirilmiş, Binance genel (public) API'sini
 kullanan, masaüstünde tek komutla çalıştırılabilen bir kripto para karar
